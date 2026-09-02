@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { createClient } from '@supabase/supabase-js';
 
-// Supabase connection (Vercel UI automatically injected these)
+// Connect to Supabase
 const supabase = createClient(
   process.env.NEXT_PUBLIC_SUPABASE_URL,
   process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
@@ -12,7 +12,7 @@ export default function Home() {
   const [loading, setLoading] = useState(true);
   const [newTask, setNewTask] = useState('');
 
-  // Fetch tasks on load
+  // Fetch tasks on page load
   useEffect(() => {
     fetchTasks();
   }, []);
@@ -27,26 +27,30 @@ export default function Home() {
     setLoading(false);
   }
 
-  // Add task manually (or it will appear via API)
+  // Add a new task (calls your API route)
   async function handleAddTask(e) {
     e.preventDefault();
     if (!newTask.trim()) return;
+
     const res = await fetch('/api/add-task', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({ description: newTask }),
     });
+
     if (res.ok) {
       setNewTask('');
-      fetchTasks(); // Refresh list
+      fetchTasks(); // Refresh the list
+    } else {
+      alert('Failed to add task. Check console for errors.');
     }
   }
 
   return (
     <div style={{ padding: '2rem', maxWidth: '800px', margin: '0 auto', fontFamily: 'sans-serif' }}>
       <h1>📋 Team Task Dashboard</h1>
-      
-      {/* Quick Add Form */}
+
+      {/* Add Task Form */}
       <form onSubmit={handleAddTask} style={{ marginBottom: '2rem', display: 'flex', gap: '10px' }}>
         <input
           type="text"
@@ -64,7 +68,7 @@ export default function Home() {
       {loading ? (
         <p>Loading tasks...</p>
       ) : tasks.length === 0 ? (
-        <p>No tasks yet. Add one above or via ChatGPT!</p>
+        <p>No tasks yet. Add one above!</p>
       ) : (
         <ul style={{ listStyle: 'none', padding: 0 }}>
           {tasks.map((task) => (
@@ -75,7 +79,7 @@ export default function Home() {
                   {task.assignee || 'Me'} · {task.status}
                 </span>
               </div>
-              {task.due_date && <div style={{ fontSize: '14px', color: '#888' }}>Due: {new Date(task.due_date).toLocaleDateString()}</div>}
+              {task.date && <div style={{ fontSize: '14px', color: '#888' }}>Due: {new Date(task.date).toLocaleDateString()}</div>}
             </li>
           ))}
         </ul>
