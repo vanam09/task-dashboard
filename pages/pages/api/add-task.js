@@ -1,4 +1,9 @@
-// No top-level imports that could cause issues during build
+// pages/api/add-task.js
+// 🔥 Force Next.js to treat this as a dynamic API route (no pre-rendering)
+export const runtime = 'nodejs';
+export const dynamic = 'force-dynamic';
+
+import { createClient } from '@supabase/supabase-js';
 
 export default async function handler(req, res) {
   // Only allow POST requests
@@ -11,14 +16,13 @@ export default async function handler(req, res) {
     return res.status(400).json({ error: 'Missing task description' });
   }
 
-  // 1. Initialize Supabase INSIDE the handler (safe for build time)
-  const { createClient } = require('@supabase/supabase-js');
+  // Connect to Supabase
   const supabase = createClient(
     process.env.NEXT_PUBLIC_SUPABASE_URL,
     process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY
   );
 
-  // 2. AI Parser function (tries OpenAI first, then DeepSeek)
+  // AI Parser (tries OpenAI first, then DeepSeek)
   async function callAI(messages) {
     const openAiKey = process.env.OPENAI_API_KEY;
     const deepSeekKey = process.env.DEEPSEEK_API_KEY;
@@ -39,7 +43,7 @@ export default async function handler(req, res) {
           }),
         });
         if (response.ok) return await response.json();
-      } catch (e) {
+      } catch (_) {
         console.log('OpenAI failed, falling back to DeepSeek');
       }
     }
@@ -58,7 +62,7 @@ export default async function handler(req, res) {
           temperature: 0.1,
         }),
       });
-      if (!response.ok) throw new Error('DeepSeek failed');
+      if (!response.ok) throw new Error('DeepSeek API failed');
       return await response.json();
     }
 
@@ -66,21 +70,20 @@ export default async function handler(req, res) {
   }
 
   try {
-    // 3. Call the AI
     const systemPrompt = {
       role: 'system',
-      content: `You are a task parser. Extract title, assignee (name or null if not mentioned), and due_date (YYYY-MM-DD) from the user's request. Return a JSON object with keys: title, assignee, due_date. If assignee is not specified, set to null. If due_date not specified, set to null. Only output JSON.`
+      content: `You are a task parser. Extract title, assignee (name or null if not mentioned), and due_date (YYYY-MM-DD). Return a JSON object with keys: title, assignee, due_date. If assignee is not specified, set to null. If due_date not specified, set to null. Only output JSON.`
     };
     const userMessage = { role: 'user', content: description };
 
     const aiResponse = await callAI([systemPrompt, userMessage]);
     const parsed = JSON.parse(aiResponse.choices[0].message.content);
 
-    // 4. Insert into Supabase
+    // 🔥 Important: Your Supabase table uses column name "date" (not "due_date")
     const { error } = await supabase.from('tasks').insert({
       title: parsed.title,
       assignee: parsed.assignee || null,
-      due_date: parsed.due_date || null,
+      date: parsed.due_date || null,   // <-- matches your table schema
       status: 'pending',
     });
 
@@ -92,8 +95,3 @@ export default async function handler(req, res) {
     res.status(500).json({ error: 'Failed to add task: ' + err.message });
   }
 }
-
-// 🔥 CRITICAL FIX: This tells Next.js NOT to pre-render this API route
-export const config = {
-  runtime: 'nodejs',
-};
